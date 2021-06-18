@@ -22,10 +22,10 @@ import kotlinx.coroutines.CoroutineDispatcher
  * platforms. If that is the case, when extending [CoroutineDispatcher] initialize
  * [mainImmediate] with [kotlinx.coroutines.Dispatchers.Main]
  * */
-abstract class CoroutineDispatchers(
-    val default: CoroutineDispatcher,
-    val io: CoroutineDispatcher,
-    val main: CoroutineDispatcher,
-    val mainImmediate: CoroutineDispatcher,
+interface CoroutineDispatchers {
+    val default: CoroutineDispatcher
+    val io: CoroutineDispatcher
+    val main: CoroutineDispatcher
+    val mainImmediate: CoroutineDispatcher
     val unconfined: CoroutineDispatcher
-)
+}

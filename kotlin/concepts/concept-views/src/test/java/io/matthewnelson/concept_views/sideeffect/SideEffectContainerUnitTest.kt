@@ -65,7 +65,7 @@ class SideEffectContainerUnitTest: CoroutineTestHelper() {
             // ensure collection/execution is had once a subscriber is registered
             var collectionCounter = 0
             val collectionJob = launch {
-                container.collect { sideEffect ->
+                container.collect { _ ->
                     TestSideEffect.execute(toCheck)
                     Assert.assertEquals(toCheck, TestSideEffect.executedString)
                     collectionCounter++
@@ -96,7 +96,7 @@ class SideEffectContainerUnitTest: CoroutineTestHelper() {
             // ensure collection/execution is had once a subscriber is registered
             var collectionCounter = 0
             val collectionJob = launch {
-                container.collect { sideEffect ->
+                container.collect { _ ->
                     TestSideEffect.execute(toCheck)
                     Assert.assertEquals(toCheck, TestSideEffect.executedString)
                     collectionCounter++

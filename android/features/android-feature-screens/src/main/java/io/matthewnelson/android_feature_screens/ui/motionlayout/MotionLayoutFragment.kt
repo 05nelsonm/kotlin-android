@@ -65,6 +65,7 @@ abstract class MotionLayoutFragment<
     protected abstract fun onViewCreatedRestoreMotionScene(viewState: MLVS, binding: VB)
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        currentViewState = viewModel.currentViewState
         onViewCreatedRestoreMotionScene(viewModel.currentViewState, binding)
     }
 

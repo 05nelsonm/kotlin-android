@@ -20,14 +20,13 @@ import io.matthewnelson.concept_authentication.coordinator.AuthenticationCoordin
 import io.matthewnelson.concept_authentication.coordinator.AuthenticationRequest
 import io.matthewnelson.concept_authentication.coordinator.AuthenticationResponse
 import io.matthewnelson.concept_authentication.state.AuthenticationState
-import io.matthewnelson.concept_authentication.state.AuthenticationStateManager
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 
 abstract class AuthenticationCoreCoordinator(
-    val authenticationStateManager: AuthenticationStateManager
+    protected val authenticationManager: AuthenticationCoreManager
 ): AuthenticationCoordinator() {
 
     @Suppress("RemoveExplicitTypeArguments", "PropertyName")
@@ -42,27 +41,49 @@ abstract class AuthenticationCoreCoordinator(
 
     protected abstract suspend fun navigateToAuthenticationView()
 
+    override suspend fun isAnEncryptionKeySet(): Boolean {
+        return authenticationManager.isAnEncryptionKeySet()
+    }
+
     override suspend fun submitAuthenticationRequest(
         request: AuthenticationRequest
     ): Flow<AuthenticationResponse> {
         @Exhaustive
         when (request) {
             is AuthenticationRequest.GetEncryptionKey -> {
-                when (authenticationStateManager.authenticationStateFlow.value) {
+                when (authenticationManager.authenticationStateFlow.value) {
                     is AuthenticationState.NotRequired -> {
-                        AuthenticationCoreManager.getEncryptionKey()?.let { key ->
+                        authenticationManager.getEncryptionKey()?.let { key ->
                             return flowOf(
                                 AuthenticationResponse.Success.Key(request, key)
                             )
+                        } ?: if (!request.navigateToAuthenticationViewOnFailure) {
+                            return flowOf(
+                                AuthenticationResponse.Failure(request)
+                            )
                         }
                     }
-                    else -> {}
+                    else -> {
+                        if (!request.navigateToAuthenticationViewOnFailure) {
+                            return flowOf(
+                                AuthenticationResponse.Failure(request)
+                            )
+                        }
+                    }
                 }
             }
             is AuthenticationRequest.LogIn -> {
-                when (authenticationStateManager.authenticationStateFlow.value) {
+
+                // If encryptionKey value is null, proceed with the regular checks and send
+                // user to Authentication View if needed, otherwise try logging in here
+                // w/o sending the user to the Authentication View.
+                request.privateKey?.let { privateKey ->
+
+                    return authenticationManager.authenticate(privateKey, request)
+
+                } ?: when (authenticationManager.authenticationStateFlow.value) {
                     is AuthenticationState.NotRequired -> {
-                        AuthenticationCoreManager.getEncryptionKey()?.let {
+                        authenticationManager.getEncryptionKey()?.let {
                             return flowOf(
                                 AuthenticationResponse.Success.Authenticated(request)
                             )
@@ -72,11 +93,12 @@ abstract class AuthenticationCoreCoordinator(
                 }
             }
             is AuthenticationRequest.ConfirmPin,
-            is AuthenticationRequest.ResetPin -> {}
+            is AuthenticationRequest.ResetPassword -> {}
         }
 
         navigateToAuthenticationView()
 
+        // TODO: Add a timeout that can be expressed in arguments
         while (
             currentCoroutineContext().isActive &&
             _authenticationRequestSharedFlow.subscriptionCount.value == 0

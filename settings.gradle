@@ -35,8 +35,8 @@ include ':kotlin:concepts:concept-views'
 /// :kotlin:crypto ///
 //////////////////////
 include ':kotlin:crypto:bouncycastle-ktx'
+include ':kotlin:crypto:crypto-common'
 include ':kotlin:crypto:k-openssl'
-include ':kotlin:crypto:k-openssl-common'
 
 ////////////////////////
 /// :kotlin:encoders ///
@@ -56,6 +56,7 @@ include ':kotlin:features:feature-navigation'
 /// :kotlin:test ///
 ////////////////////
 include ':kotlin:test:test-concept-coroutines'
+include ':kotlin:test:test-feature-authentication-core'
 include ':kotlin:test:test-k-openssl'
 
 include ':sample'

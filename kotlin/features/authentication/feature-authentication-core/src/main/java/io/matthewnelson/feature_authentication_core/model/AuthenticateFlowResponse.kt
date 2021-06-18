@@ -25,7 +25,7 @@ import io.matthewnelson.concept_authentication_core.AuthenticationManager
 sealed class AuthenticateFlowResponse {
 
     /**
-     * Is issued after processing a [AuthenticationRequest.ResetPin] for the first time via
+     * Is issued after processing a [AuthenticationRequest.ResetPassword] for the first time via
      * [AuthenticationManager.authenticate] where the user's input was validated against
      * their currently set password.
      *
@@ -41,7 +41,7 @@ sealed class AuthenticateFlowResponse {
      * */
     class PasswordConfirmedForReset private constructor(
         private val originalValidatedUserInput: UserInputWriter,
-        private val originalRequest: AuthenticationRequest.ResetPin
+        private val originalRequest: AuthenticationRequest.ResetPassword
     ): AuthenticateFlowResponse(), ConfirmUserInputToReset {
 
         companion object {
@@ -56,7 +56,7 @@ sealed class AuthenticateFlowResponse {
             @JvmSynthetic
             internal fun generate(
                 validUserInput: UserInputWriter,
-                request: AuthenticationRequest.ResetPin
+                request: AuthenticationRequest.ResetPassword
             ): PasswordConfirmedForReset? =
                 synchronized(trackerLock) {
                     if (resetCompletionTracker.contains(request.hashCode())) {
@@ -224,28 +224,27 @@ sealed class AuthenticateFlowResponse {
         class Unclassified(val e: Exception): Error()
 
         sealed class Authenticate: Error() {
-            object InvalidPinEntrySize: Authenticate()
+            object InvalidPasswordEntrySize: Authenticate()
         }
 
-        sealed class ResetPin: Error() {
-            object NewPinEntryWasNull: ResetPin()
-            object InvalidNewPinEntrySize: ResetPin()
-            object InvalidConfirmedPinEntrySize: ResetPin()
-            object NewPinDoesNotMatchConfirmedPin: ResetPin()
-            object CurrentPinEntryIsNotValid: ResetPin()
-            object CredentialsFromPrefsReturnedNull: ResetPin()
-            object FailedToStartService: ResetPin()
-            object CurrentPinEntryWasCleared: ResetPin()
-            object NewPinEntryWasCleared: ResetPin()
+        sealed class ResetPassword: Error() {
+            object NewPasswordEntryWasNull: ResetPassword()
+            object InvalidNewPasswordEntrySize: ResetPassword()
+            object InvalidConfirmedPasswordEntrySize: ResetPassword()
+            object NewPinDoesNotMatchConfirmedPassword: ResetPassword()
+            object CurrentPasswordEntryIsNotValid: ResetPassword()
+            object CredentialsFromPrefsReturnedNull: ResetPassword()
+            object CurrentPasswordEntryWasCleared: ResetPassword()
+            object NewPasswordEntryWasCleared: ResetPassword()
         }
 
-        sealed class SetPinFirstTime: Error() {
-            object InvalidNewPinEntrySize: SetPinFirstTime()
-            object NewPinDoesNotMatchConfirmedPin: SetPinFirstTime()
-            object CredentialsFromPrefsReturnedNull: SetPinFirstTime()
-            object FailedToStartService: SetPinFirstTime()
-            object NewPinEntryWasCleared: SetPinFirstTime()
-            object FailedToEncryptTestString: SetPinFirstTime()
+        sealed class SetPasswordFirstTime: Error() {
+            object InvalidNewPasswordEntrySize: SetPasswordFirstTime()
+            object NewPasswordDoesNotMatchConfirmedPassword: SetPasswordFirstTime()
+            object CredentialsFromPrefsReturnedNull: SetPasswordFirstTime()
+            object FailedToStartService: SetPasswordFirstTime()
+            object NewPasswordEntryWasCleared: SetPasswordFirstTime()
+            object FailedToEncryptTestString: SetPasswordFirstTime()
         }
     }
 }

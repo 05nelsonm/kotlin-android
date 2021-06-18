@@ -15,10 +15,10 @@
 * */
 package io.matthewnelson.k_openssl.algos
 
-import io.matthewnelson.k_openssl_common.annotations.UnencryptedDataAccess
+import io.matthewnelson.crypto_common.annotations.UnencryptedDataAccess
 import io.matthewnelson.k_openssl.KOpenSSL
-import io.matthewnelson.k_openssl_common.clazzes.*
-import io.matthewnelson.k_openssl_common.extensions.encodeToByteArray
+import io.matthewnelson.crypto_common.clazzes.*
+import io.matthewnelson.crypto_common.extensions.isValidUTF8
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -140,8 +140,8 @@ class AES256CBC_PBKDF2_HMAC_SHA256: KOpenSSL() {
                 components.clearValues()
             }
 
-            if (!isValidUTF8(decrypted)) {
-                decrypted.fill('*'.toByte())
+            if (!decrypted.isValidUTF8) {
+                decrypted.fill('*'.code.toByte())
                 throw CharacterCodingException()
             }
 
@@ -149,7 +149,7 @@ class AES256CBC_PBKDF2_HMAC_SHA256: KOpenSSL() {
             UnencryptedByteArray(
                 decrypted.copyOfRange(0, decrypted.size - decrypted.last().toInt())
             ).also {
-                decrypted.fill('*'.toByte())
+                decrypted.fill('*'.code.toByte())
             }
         }
 

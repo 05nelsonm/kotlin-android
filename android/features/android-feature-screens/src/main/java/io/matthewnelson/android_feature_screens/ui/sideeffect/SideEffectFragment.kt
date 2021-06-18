@@ -15,15 +15,14 @@
 * */
 package io.matthewnelson.android_feature_screens.ui.sideeffect
 
-import android.os.Bundle
 import androidx.annotation.LayoutRes
-import androidx.lifecycle.lifecycleScope
 import androidx.viewbinding.ViewBinding
 import io.matthewnelson.concept_views.sideeffect.SideEffect
 import io.matthewnelson.concept_views.viewstate.ViewState
 import io.matthewnelson.android_feature_screens.ui.base.BaseFragment
 import io.matthewnelson.android_feature_viewmodel.SideEffectViewModel
 import io.matthewnelson.android_feature_viewmodel.collectSideEffects
+import kotlinx.coroutines.launch
 
 /**
  * An abstraction that adds [SideEffect]s to the [BaseFragment].
@@ -42,19 +41,18 @@ abstract class SideEffectFragment<
         VB
         >(layoutId)
 {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onStart() {
+        super.onStart()
         subscribeToSideEffectSharedFlow()
     }
 
     protected abstract suspend fun onSideEffectCollect(sideEffect: SE)
 
     /**
-     * Called from [onCreate]. Must be mindful if overriding to lazily start things
-     * using lifecycleScope.launchWhenStarted
+     * Called from [onStart] and cancelled in [onStop]
      * */
     protected open fun subscribeToSideEffectSharedFlow() {
-        lifecycleScope.launchWhenStarted {
+        onStopSupervisor.scope.launch(viewModel.mainImmediate) {
             viewModel.collectSideEffects { sideEffect ->
                 onSideEffectCollect(sideEffect)
             }

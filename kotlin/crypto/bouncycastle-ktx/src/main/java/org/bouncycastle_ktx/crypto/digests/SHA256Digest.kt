@@ -14,6 +14,7 @@ import org.bouncycastle_ktx.util.Pack
  * SHA-512 1024   64    512
  * </pre>
  * */
+@Suppress("PrivatePropertyName", "FunctionName")
 class SHA256Digest: GeneralDigest, EncodableDigest {
     private var H1 = 0
     private var H2 = 0

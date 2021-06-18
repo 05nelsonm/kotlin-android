@@ -15,12 +15,12 @@
 * */
 package io.matthewnelson.concept_encryption_key
 
-import io.matthewnelson.k_openssl_common.clazzes.Password
+import io.matthewnelson.crypto_common.clazzes.Password
 
-class EncryptionKey private constructor(val password: Password) {
+class EncryptionKey private constructor(val privateKey: Password, val publicKey: Password) {
     companion object {
         @JvmSynthetic
-        internal fun instantiate(password: Password): EncryptionKey =
-            EncryptionKey(password)
+        internal fun instantiate(privateKey: Password, publicKey: Password): EncryptionKey =
+            EncryptionKey(privateKey, publicKey)
     }
 }

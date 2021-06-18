@@ -20,8 +20,14 @@ import kotlinx.coroutines.flow.Flow
 abstract class AuthenticationCoordinator {
 
     /**
+     * Checks the persistent storage to see if a key exists. Does not decrypt the key or
+     * return it.
+     * */
+    abstract suspend fun isAnEncryptionKeySet(): Boolean
+
+    /**
      * Returns the corresponding response for the provided request, or
-     * [AuthenticationResponse.Failure] in some instances.
+     * [AuthenticationResponse.Failure].
      *
      * Responses for [AuthenticationRequest.ConfirmPin] submission:
      *   - [AuthenticationResponse.Success.Authenticated]
@@ -31,11 +37,17 @@ abstract class AuthenticationCoordinator {
      *   - [AuthenticationResponse.Success.Key]
      *   - [AuthenticationResponse.Failure]
      *
-     * Responses for [AuthenticationRequest.LogIn] submission:
+     * Responses for [AuthenticationRequest.LogIn] submission where
+     * [AuthenticationRequest.LogIn.privateKey] is `null`:
      *   - [AuthenticationResponse.Success.Authenticated]
      *   - [AuthenticationResponse.Failure]
      *
-     * Responses for [AuthenticationRequest.ResetPin] submission:
+     * Responses for [AuthenticationRequest.LogIn] submission where
+     * [AuthenticationRequest.LogIn.privateKey] is **not** `null`:
+     *   - [AuthenticationResponse.Success.Key]
+     *   - [AuthenticationResponse.Failure]
+     *
+     * Responses for [AuthenticationRequest.ResetPassword] submission:
      *   - [AuthenticationResponse.Success.Authenticated]
      *   - [AuthenticationResponse.Failure]
      * */

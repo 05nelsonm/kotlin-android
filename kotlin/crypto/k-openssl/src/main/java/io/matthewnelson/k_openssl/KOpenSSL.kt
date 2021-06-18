@@ -15,10 +15,10 @@
 * */
 package io.matthewnelson.k_openssl
 
-import io.matthewnelson.k_openssl_common.annotations.RawPasswordAccess
-import io.matthewnelson.k_openssl_common.clazzes.*
-import io.matthewnelson.k_openssl_common.extensions.encodeToByteArray
-import io.matthewnelson.k_openssl_common.extensions.toByteArray
+import io.matthewnelson.crypto_common.annotations.RawPasswordAccess
+import io.matthewnelson.crypto_common.clazzes.*
+import io.matthewnelson.crypto_common.extensions.encodeToByteArray
+import io.matthewnelson.crypto_common.extensions.toByteArray
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -26,7 +26,6 @@ import okio.base64.decodeBase64ToArray
 import okio.base64.encodeBase64
 import org.bouncycastle_ktx.crypto.generators.PKCS5S2ParametersGenerator
 import org.bouncycastle_ktx.crypto.params.KeyParameter
-import java.nio.ByteBuffer
 import java.security.InvalidAlgorithmParameterException
 import java.security.InvalidKeyException
 import java.security.NoSuchAlgorithmException
@@ -37,30 +36,21 @@ import javax.crypto.NoSuchPaddingException
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
+inline val CharSequence.isSalted: Boolean
+    get() = try {
+        lines().joinToString("")
+            .decodeBase64ToArray()
+            ?.copyOfRange(0, 8)
+            ?.contentEquals(KOpenSSL.SALTED.encodeToByteArray())
+            ?: false
+    } catch (e: Exception) {
+        false
+    }
+
 abstract class KOpenSSL {
 
     companion object {
         const val SALTED = "Salted__"
-
-        fun isSalted(chars: CharSequence): Boolean =
-            try {
-                chars.lines().joinToString("")
-                    .decodeBase64ToArray()
-                    ?.copyOfRange(0, 8)
-                    ?.contentEquals(SALTED.encodeToByteArray())
-                    ?: false
-            } catch (e: Exception) {
-                false
-            }
-
-        fun isValidUTF8(input: ByteArray): Boolean {
-            return try {
-                charset("UTF-8").newDecoder().decode(ByteBuffer.wrap(input))
-                true
-            } catch (e: CharacterCodingException) {
-                false
-            }
-        }
     }
 
     /**
@@ -205,12 +195,12 @@ abstract class KOpenSSL {
                         // Input Vector is bytes 32 - 47 of the derived secret key
                         iv = secretKey.copyOfRange(32, secretKey.size)
                     ).also {
-                        secretKey.fill('*'.toByte())
+                        secretKey.fill('*'.code.toByte())
                     }
 
                 }
             } finally {
-                generator.password?.fill('*'.toByte())
+                generator.password?.fill('*'.code.toByte())
             }
         }
 
@@ -225,8 +215,8 @@ abstract class KOpenSSL {
             IvParameterSpec(iv)
 
         fun clearValues() {
-            key.fill('*'.toByte())
-            iv.fill('*'.toByte())
+            key.fill('*'.code.toByte())
+            iv.fill('*'.code.toByte())
         }
     }
 }

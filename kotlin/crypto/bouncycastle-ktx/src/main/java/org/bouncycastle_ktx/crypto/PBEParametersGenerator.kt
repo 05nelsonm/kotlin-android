@@ -5,6 +5,7 @@ import org.bouncycastle_ktx.util.Strings
 /**
  * super class for all Password Based Encryption (PBE) parameter generator classes.
  */
+@Suppress("FunctionName")
 abstract class PBEParametersGenerator
 /**
  * base constructor.
@@ -92,7 +93,7 @@ protected constructor() {
             return if (password != null) {
                 val bytes = ByteArray(password.size)
                 for (i in bytes.indices) {
-                    bytes[i] = password[i].toByte()
+                    bytes[i] = password[i].code.toByte()
                 }
                 bytes
             } else {
@@ -129,8 +130,8 @@ protected constructor() {
                 // +1 for extra 2 pad bytes.
                 val bytes = ByteArray((password.size + 1) * 2)
                 for (i in password.indices) {
-                    bytes[i * 2] = (password[i].toInt() ushr 8).toByte()
-                    bytes[i * 2 + 1] = password[i].toByte()
+                    bytes[i * 2] = (password[i].code ushr 8).toByte()
+                    bytes[i * 2 + 1] = password[i].code.toByte()
                 }
                 bytes
             } else {

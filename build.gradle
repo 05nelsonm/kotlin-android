@@ -23,11 +23,7 @@ allprojects {
     repositories {
         mavenCentral()
         google()
-
-        // TODO:
-        //  Remove once https://github.com/kirich1409/ViewBindingPropertyDelegate/issues/39
-        //  is resolved
-        jcenter()
+        gradlePluginPortal()
     }
 
     tasks.withType(Test) {
@@ -50,7 +46,6 @@ allprojects {
         kotlinOptions {
             jvmTarget = JavaVersion.VERSION_1_8
             freeCompilerArgs += [
-                    "-Xinline-classes",
                     "-Xopt-in=kotlin.RequiresOptIn",
                     '-Xopt-in=kotlin.time.ExperimentalTime',
                     '-Xopt-in=kotlinx.coroutines.ExperimentalCoroutinesApi',

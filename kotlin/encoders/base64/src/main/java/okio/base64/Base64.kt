@@ -39,9 +39,9 @@ sealed class Base64 {
     }
 }
 
-fun String.decodeBase64ToArray(): ByteArray? {
+fun CharArray.decodeBase64ToArray(): ByteArray? {
     // Ignore trailing '=' padding and whitespace from the input.
-    var limit = length
+    var limit = size
     while (limit > 0) {
         val c = this[limit - 1]
         if (c != '=' && c != '\n' && c != '\r' && c != ' ' && c != '\t') {
@@ -64,17 +64,17 @@ fun String.decodeBase64ToArray(): ByteArray? {
             // char ASCII value
             //  A    65    0
             //  Z    90    25 (ASCII - 65)
-            bits = c.toInt() - 65
+            bits = c.code - 65
         } else if (c in 'a'..'z') {
             // char ASCII value
             //  a    97    26
             //  z    122   51 (ASCII - 71)
-            bits = c.toInt() - 71
+            bits = c.code - 71
         } else if (c in '0'..'9') {
             // char ASCII value
             //  0    48    52
             //  9    57    61 (ASCII + 4)
-            bits = c.toInt() + 4
+            bits = c.code + 4
         } else if (c == '+' || c == '-') {
             bits = 62
         } else if (c == '/' || c == '_') {
@@ -97,8 +97,7 @@ fun String.decodeBase64ToArray(): ByteArray? {
         }
     }
 
-    val lastWordChars = inCount % 4
-    when (lastWordChars) {
+    when (inCount % 4) {
         1 -> {
             // We read 1 char followed by "===". But 6 bits is a truncated byte! Fail.
             return null
@@ -123,7 +122,17 @@ fun String.decodeBase64ToArray(): ByteArray? {
     return out.copyOf(outCount)
 }
 
-fun ByteArray.encodeBase64(type: Base64 = Base64.Default): String {
+@Suppress("NOTHING_TO_INLINE")
+inline fun String.decodeBase64ToArray(): ByteArray? {
+    return toCharArray().decodeBase64ToArray()
+}
+
+@Suppress("NOTHING_TO_INLINE")
+inline fun ByteArray.encodeBase64(type: Base64 = Base64.Default): String {
+    return encodeBase64ToByteArray(type).toString(charset("UTF-8"))
+}
+
+fun ByteArray.encodeBase64ToByteArray(type: Base64 = Base64.Default): ByteArray {
     val map = type.encodingTable
     val length = (size + 2) / 3 * 4
     val out = ByteArray(length)
@@ -144,8 +153,8 @@ fun ByteArray.encodeBase64(type: Base64 = Base64.Default): String {
             val b0 = this[i].toInt()
             out[index++] = map[b0 and 0xff shr 2]
             out[index++] = map[b0 and 0x03 shl 4]
-            out[index++] = '='.toByte()
-            out[index] = '='.toByte()
+            out[index++] = '='.code.toByte()
+            out[index] = '='.code.toByte()
         }
         2 -> {
             val b0 = this[i++].toInt()
@@ -153,8 +162,8 @@ fun ByteArray.encodeBase64(type: Base64 = Base64.Default): String {
             out[index++] = map[(b0 and 0xff shr 2)]
             out[index++] = map[(b0 and 0x03 shl 4) or (b1 and 0xff shr 4)]
             out[index++] = map[(b1 and 0x0f shl 2)]
-            out[index] = '='.toByte()
+            out[index] = '='.code.toByte()
         }
     }
-    return out.toString(charset("UTF-8"))
+    return out
 }

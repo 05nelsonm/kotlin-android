@@ -19,11 +19,13 @@ import android.os.Bundle
 import androidx.annotation.LayoutRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.viewbinding.ViewBinding
+import io.matthewnelson.android_feature_viewmodel.util.OnStopSupervisor
 import io.matthewnelson.concept_navigation.NavigationRequest
+import io.matthewnelson.feature_navigation.NavigationDriver
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 /**
  * Note, [VM] and [NVM] must be the same class (the [ViewModel]), otherwise a
@@ -33,7 +35,8 @@ import kotlinx.coroutines.flow.collect
  * */
 abstract class NavigationActivity<
         VM: ViewModel,
-        NVM: NavigationViewModel,
+        D: NavigationDriver<NavController>,
+        NVM: NavigationViewModel<D>,
         VB: ViewBinding
         >(@LayoutRes layoutId: Int): AppCompatActivity(layoutId)
 {
@@ -46,6 +49,8 @@ abstract class NavigationActivity<
      * */
     protected abstract val navigationViewModel: NVM
 
+    protected val onStopSupervisor: OnStopSupervisor = OnStopSupervisor()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -53,7 +58,12 @@ abstract class NavigationActivity<
             "'viewModel' variable is not the same class as 'navigationActivityViewModel'"
         }
 
-        lifecycleScope.launchWhenStarted {
+        onStopSupervisor.observe(this)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        onStopSupervisor.scope.launch(navigationViewModel.dispatchers.mainImmediate) {
             navigationViewModel
                 .navigationDriver
                 .navigationRequestSharedFlow

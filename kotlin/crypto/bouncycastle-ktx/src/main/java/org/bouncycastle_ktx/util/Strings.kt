@@ -40,12 +40,12 @@ object Strings {
         var i = 0
         while (i < string.size) {
             var ch = string[i]
-            if (ch.toInt() < 0x0080) {
-                sOut.write(ch.toInt())
-            } else if (ch.toInt() < 0x0800) {
-                sOut.write(0xc0 or (ch.toInt() shr 6))
-                sOut.write(0x80 or (ch.toInt() and 0x3f))
-            } else if (ch.toInt() >= 0xD800 && ch.toInt() <= 0xDFFF) {
+            if (ch.code < 0x0080) {
+                sOut.write(ch.code)
+            } else if (ch.code < 0x0800) {
+                sOut.write(0xc0 or (ch.code shr 6))
+                sOut.write(0x80 or (ch.code and 0x3f))
+            } else if (ch.code in 0xD800..0xDFFF) {
                 // in error - can only happen, if the Java String class has a
                 // bug.
                 check(i + 1 < string.size) { "invalid UTF-16 codepoint" }
@@ -54,16 +54,16 @@ object Strings {
                 val W2 = ch
                 // in error - can only happen, if the Java String class has a
                 // bug.
-                check(W1.toInt() <= 0xDBFF) { "invalid UTF-16 codepoint" }
-                val codePoint = (W1.toInt() and 0x03FF shl 10 or (W2.toInt() and 0x03FF)) + 0x10000
+                check(W1.code <= 0xDBFF) { "invalid UTF-16 codepoint" }
+                val codePoint = (W1.code and 0x03FF shl 10 or (W2.code and 0x03FF)) + 0x10000
                 sOut.write(0xf0 or (codePoint shr 18))
                 sOut.write(0x80 or (codePoint shr 12 and 0x3F))
                 sOut.write(0x80 or (codePoint shr 6 and 0x3F))
                 sOut.write(0x80 or (codePoint and 0x3F))
             } else {
-                sOut.write(0xe0 or (ch.toInt() shr 12))
-                sOut.write(0x80 or (ch.toInt() shr 6 and 0x3F))
-                sOut.write(0x80 or (ch.toInt() and 0x3F))
+                sOut.write(0xe0 or (ch.code shr 12))
+                sOut.write(0x80 or (ch.code shr 6 and 0x3F))
+                sOut.write(0x80 or (ch.code and 0x3F))
             }
             i++
         }
@@ -80,9 +80,9 @@ object Strings {
         val chars = string.toCharArray()
         for (i in chars.indices) {
             val ch = chars[i]
-            if ('a' <= ch && 'z' >= ch) {
+            if (ch in 'a'..'z') {
                 changed = true
-                chars[i] = (ch - 'a' + 'A'.toInt()).toChar()
+                chars[i] = (ch - 'a' + 'A'.code).toChar()
             }
         }
         return if (changed) {
@@ -101,9 +101,9 @@ object Strings {
         val chars = string.toCharArray()
         for (i in chars.indices) {
             val ch = chars[i]
-            if ('A' <= ch && 'Z' >= ch) {
+            if (ch in 'A'..'Z') {
                 changed = true
-                chars[i] = (ch - 'A' + 'a'.toInt()).toChar()
+                chars[i] = (ch - 'A' + 'a'.code).toChar()
             }
         }
         return if (changed) {
@@ -114,7 +114,7 @@ object Strings {
     fun toByteArray(chars: CharArray): ByteArray {
         val bytes = ByteArray(chars.size)
         for (i in bytes.indices) {
-            bytes[i] = chars[i].toByte()
+            bytes[i] = chars[i].code.toByte()
         }
         return bytes
     }
@@ -123,7 +123,7 @@ object Strings {
         val bytes = ByteArray(string.length)
         for (i in bytes.indices) {
             val ch = string[i]
-            bytes[i] = ch.toByte()
+            bytes[i] = ch.code.toByte()
         }
         return bytes
     }
@@ -132,7 +132,7 @@ object Strings {
         val count = s.length
         for (i in 0 until count) {
             val c = s[i]
-            buf[off + i] = c.toByte()
+            buf[off + i] = c.code.toByte()
         }
         return count
     }

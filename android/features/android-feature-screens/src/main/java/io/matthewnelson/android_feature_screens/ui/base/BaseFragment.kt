@@ -16,13 +16,15 @@
 package io.matthewnelson.android_feature_screens.ui.base
 
 import android.os.Bundle
+import android.view.View
 import androidx.annotation.LayoutRes
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import androidx.viewbinding.ViewBinding
 import io.matthewnelson.android_feature_viewmodel.BaseViewModel
 import io.matthewnelson.android_feature_viewmodel.collectViewState
+import io.matthewnelson.android_feature_viewmodel.util.OnStopSupervisor
 import io.matthewnelson.concept_views.viewstate.ViewState
+import kotlinx.coroutines.launch
 
 abstract class BaseFragment<
         VS: ViewState<VS>,
@@ -32,23 +34,37 @@ abstract class BaseFragment<
 {
     protected abstract val viewModel: BVM
     protected abstract val binding: VB
+    protected val onStopSupervisor: OnStopSupervisor = OnStopSupervisor()
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        onStopSupervisor.observe(viewLifecycleOwner)
+    }
+
+    override fun onStart() {
+        super.onStart()
         subscribeToViewStateFlow()
     }
 
     protected abstract suspend fun onViewStateFlowCollect(viewState: VS)
+    protected var currentViewState: VS? = null
 
     /**
-     * Called from [onCreate]. Must be mindful if overriding to lazily start things
-     * using lifecycleScope.launchWhenStarted
+     * Called from [onStart] and cancelled from [onStop]
      * */
     protected open fun subscribeToViewStateFlow() {
-        lifecycleScope.launchWhenStarted {
+        onStopSupervisor.scope.launch(viewModel.mainImmediate) {
             viewModel.collectViewState { viewState ->
-                onViewStateFlowCollect(viewState)
+                if (currentViewState != viewState) {
+                    currentViewState = viewState
+                    onViewStateFlowCollect(viewState)
+                }
             }
         }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        currentViewState = null
     }
 }

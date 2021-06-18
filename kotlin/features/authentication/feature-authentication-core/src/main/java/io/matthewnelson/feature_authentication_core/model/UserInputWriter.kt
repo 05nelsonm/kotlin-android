@@ -17,9 +17,9 @@ package io.matthewnelson.feature_authentication_core.model
 
 import io.matthewnelson.concept_authentication_core.model.UserInput
 import io.matthewnelson.feature_authentication_core.AuthenticationCoreManager
-import io.matthewnelson.k_openssl_common.annotations.RawPasswordAccess
-import io.matthewnelson.k_openssl_common.clazzes.Password
-import io.matthewnelson.k_openssl_common.clazzes.clear
+import io.matthewnelson.crypto_common.annotations.RawPasswordAccess
+import io.matthewnelson.crypto_common.clazzes.Password
+import io.matthewnelson.crypto_common.clazzes.clear
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,25 +46,25 @@ internal class UserInputWriter private constructor(): CharArrayWriter(
     @Synchronized
     @Throws(IllegalArgumentException::class)
     override fun addCharacter(c: Char) {
-        if (this.size() + 1 > AuthenticationCoreManager.maxUserInputLength) {
+        if (size() + 1 > AuthenticationCoreManager.maxUserInputLength) {
             throw IllegalArgumentException("Cannot add anymore characters")
         }
 
-        this.append(c)
+        append(c)
         _inputLengthStateFlow.value += 1
     }
 
     @Synchronized
     override fun clearInput() {
         buf.fill('0')
-        this.reset()
+        reset()
         _inputLengthStateFlow.value = 0
     }
 
     @Synchronized
     fun clone(): UserInputWriter =
         UserInputWriter().also { newWriter ->
-            for (i in 0 until this.size()) {
+            for (i in 0 until size()) {
                 newWriter.addCharacter(buf[i])
             }
         }
@@ -76,7 +76,7 @@ internal class UserInputWriter private constructor(): CharArrayWriter(
         }
 
         try {
-            if (this.size() != (userInput as UserInputWriter).size()) {
+            if (size() != (userInput as UserInputWriter).size()) {
                 return false
             }
         } catch (e: ClassCastException) {
@@ -87,7 +87,7 @@ internal class UserInputWriter private constructor(): CharArrayWriter(
         @OptIn(RawPasswordAccess::class)
         Password(userInput.toCharArray()).let { copy ->
             try {
-                for (i in 0 until this.size()) {
+                for (i in 0 until size()) {
                     if (buf[i] != copy.value[i]) {
                         inputMatch = false
                         break

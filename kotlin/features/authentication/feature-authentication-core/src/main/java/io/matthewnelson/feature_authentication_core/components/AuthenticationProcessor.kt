@@ -18,10 +18,11 @@ package io.matthewnelson.feature_authentication_core.components
 import app.cash.exhaustive.Exhaustive
 import io.matthewnelson.concept_authentication.coordinator.AuthenticationRequest
 import io.matthewnelson.concept_authentication.coordinator.AuthenticationResponse
-import io.matthewnelson.feature_authentication_core.data.PersistentStorage
+import io.matthewnelson.feature_authentication_core.data.AuthenticationCoreStorage
 import io.matthewnelson.concept_authentication.state.AuthenticationState
 import io.matthewnelson.concept_coroutines.CoroutineDispatchers
 import io.matthewnelson.concept_encryption_key.EncryptionKey
+import io.matthewnelson.concept_encryption_key.EncryptionKeyException
 import io.matthewnelson.concept_encryption_key.EncryptionKeyHandler
 import io.matthewnelson.feature_authentication_core.AuthenticationCoreManager
 import io.matthewnelson.feature_authentication_core.model.*
@@ -30,9 +31,9 @@ import io.matthewnelson.feature_authentication_core.model.Credentials
 import io.matthewnelson.feature_authentication_core.model.UserInputWriter
 import io.matthewnelson.k_openssl.KOpenSSL
 import io.matthewnelson.k_openssl.algos.AES256CBC_PBKDF2_HMAC_SHA256
-import io.matthewnelson.k_openssl_common.annotations.RawPasswordAccess
-import io.matthewnelson.k_openssl_common.clazzes.*
-import io.matthewnelson.k_openssl_common.extensions.toByteArray
+import io.matthewnelson.crypto_common.annotations.RawPasswordAccess
+import io.matthewnelson.crypto_common.clazzes.*
+import io.matthewnelson.crypto_common.extensions.toByteArray
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 
@@ -40,43 +41,110 @@ import kotlinx.coroutines.withContext
  * TODO: Really need to implement a "login with encryption key" response to better handle
  *  errors.
  * */
-internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> private constructor(
-    private val authenticationCoreManager: AuthenticationCoreManager<T>,
+internal class AuthenticationProcessor private constructor(
+    private val authenticationCoreManager: AuthenticationCoreManager,
     private val dispatchers: CoroutineDispatchers,
     private val encryptionKeyHashIterations: HashIterations,
     val encryptionKeyHandler: EncryptionKeyHandler,
-    private val persistentStorage: PersistentStorage
+    private val authenticationCoreStorage: AuthenticationCoreStorage,
+    private val authenticationManagerInitializer: AuthenticationManagerInitializer
     // TODO: WrongPinLockout
 ) {
 
     companion object {
         @JvmSynthetic
-        fun <T: AuthenticationManagerInitializer> instantiate(
-            authenticationCoreManager: AuthenticationCoreManager<T>,
+        fun instantiate(
+            authenticationCoreManager: AuthenticationCoreManager,
             dispatchers: CoroutineDispatchers,
             encryptionKeyHashIterations: HashIterations,
             encryptionKeyHandler: EncryptionKeyHandler,
-            persistentStorage: PersistentStorage
-        ): AuthenticationProcessor<T> =
+            authenticationCoreStorage: AuthenticationCoreStorage,
+            authenticationManagerInitializer: AuthenticationManagerInitializer
+        ): AuthenticationProcessor =
             AuthenticationProcessor(
                 authenticationCoreManager,
                 dispatchers,
                 encryptionKeyHashIterations,
                 encryptionKeyHandler,
-                persistentStorage
+                authenticationCoreStorage,
+                authenticationManagerInitializer
             )
     }
 
     @JvmSynthetic
-    fun initializeWrongPinLockout(value: T) {
-//        if (!authenticationCoreManager.isInitialized) {
-            // TODO: Implement
-//        }
-    }
+    suspend fun isAnEncryptionKeySet(): Boolean =
+        authenticationCoreStorage.retrieveCredentials() != null
 
     ////////////////////
     /// Authenticate ///
     ////////////////////
+    @JvmSynthetic
+    @OptIn(RawPasswordAccess::class)
+    fun authenticate(
+        privateKey: Password,
+        request: AuthenticationRequest.LogIn
+    ): Flow<AuthenticationResponse> = flow {
+
+        authenticationCoreStorage.retrieveCredentials()?.let { credsString ->
+
+            val creds: Credentials? = try {
+                Credentials.fromString(credsString)
+            } catch (e: IllegalArgumentException) {
+                null
+            }
+
+            creds?.let { nnCreds ->
+
+                val kOpenssl = AES256CBC_PBKDF2_HMAC_SHA256()
+
+                val validation = nnCreds.validateTestString(
+                    dispatchers,
+                    privateKey,
+                    encryptionKeyHandler,
+                    kOpenssl
+                )
+
+                if (validation) {
+
+                    try {
+                        val publicKey = nnCreds.decryptPublicKey(
+                            dispatchers,
+                            privateKey,
+                            encryptionKeyHandler,
+                            kOpenssl
+                        )
+
+                        val key = encryptionKeyHandler.storeCopyOfEncryptionKey(
+                            privateKey.value,
+                            publicKey.value
+                        )
+
+//                        authenticationCoreManager.setEncryptionKey(key)
+                        authenticationCoreManager.updateAuthenticationState(
+                            AuthenticationState.NotRequired,
+                            key
+                        )
+
+                        flowOf(AuthenticationResponse.Success.Key(request, key))
+
+                    } catch (e: AuthenticationException) {
+                        flowOf(AuthenticationResponse.Failure(request))
+                    } catch (e: EncryptionKeyException) {
+                        flowOf(AuthenticationResponse.Failure(request))
+                    }
+
+                } else {
+
+                    flowOf(AuthenticationResponse.Failure(request))
+
+                }
+
+            } ?: flowOf(AuthenticationResponse.Failure(request))
+
+        } ?: flowOf(AuthenticationResponse.Failure(request))
+
+    }
+
     @JvmSynthetic
     fun authenticate(
         pinEntry: UserInputWriter,
@@ -86,6 +154,7 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
         validatePinEntry(AES256CBC_PBKDF2_HMAC_SHA256(), pinEntry).let { response ->
             @Exhaustive
             when (response) {
+
                 is PinValidationResponse.PinEntryIsValid -> {
                     // TODO: Clear WrongPinLockout
                     emitAll(
@@ -96,16 +165,19 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
                         )
                     )
                 }
+
                 is PinValidationResponse.PinEntryIsNotValid -> {
                     // TODO: WrongPinLockout
                     emit(AuthenticateFlowResponse.WrongPin.instantiate(2))
                 }
+
                 is PinValidationResponse.NoCredentials -> {
                     emit(
                         AuthenticateFlowResponse.ConfirmInputToSetForFirstTime
                             .instantiate(pinEntry.clone())
                     )
                 }
+
                 is PinValidationResponse.CredentialsFromStringError -> {
 //                    response.credentialsString
                     // TODO: Persisted String value was malformed. Add logic to
@@ -115,34 +187,67 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
         }
     }
 
+    @OptIn(RawPasswordAccess::class)
     private suspend fun validatePinEntry(
         kOpenSSL: KOpenSSL,
         pinEntry: UserInputWriter
     ): PinValidationResponse =
-        persistentStorage.retrieveCredentials()?.let { credsString ->
+        authenticationCoreStorage.retrieveCredentials()?.let { credsString ->
             val creds = try {
                 Credentials.fromString(credsString)
             } catch (e: IllegalArgumentException) {
                 return PinValidationResponse.CredentialsFromStringError(credsString)
             }
 
-            val key: EncryptionKey = try {
-                creds.decryptEncryptionKey(
+            return try {
+                val privateKey = creds.decryptPrivateKey(
                     dispatchers,
                     encryptionKeyHashIterations,
-                    encryptionKeyHandler,
                     kOpenSSL,
                     pinEntry
                 )
-            } catch (e: AuthenticationException) {
-                return PinValidationResponse.PinEntryIsNotValid
-            }
 
-            return if (creds.validateTestString(dispatchers, key, encryptionKeyHandler, kOpenSSL)) {
-                PinValidationResponse.PinEntryIsValid(key)
-            } else {
+                val validation = creds.validateTestString(
+                    dispatchers,
+                    privateKey,
+                    encryptionKeyHandler,
+                    kOpenSSL
+                )
+
+                if (!validation) {
+                    privateKey.clear()
+                    return PinValidationResponse.PinEntryIsNotValid
+                }
+
+                val publicKey = try {
+                    creds.decryptPublicKey(
+                        dispatchers,
+                        privateKey,
+                        encryptionKeyHandler,
+                        kOpenSSL
+                    )
+                } catch (e: AuthenticationException) {
+                    privateKey.clear()
+                    throw e
+                }
+
+                val encryptionKey = try {
+                    encryptionKeyHandler.storeCopyOfEncryptionKey(
+                        privateKey.value,
+                        publicKey.value
+                    )
+                } finally {
+                    privateKey.clear()
+                    publicKey.clear()
+                }
+
+                PinValidationResponse.PinEntryIsValid(encryptionKey)
+            } catch (e: AuthenticationException) {
+                PinValidationResponse.PinEntryIsNotValid
+            } catch (e: EncryptionKeyException) {
                 PinValidationResponse.PinEntryIsNotValid
             }
+
         } ?: PinValidationResponse.NoCredentials
 
     private sealed class PinValidationResponse {
@@ -156,6 +261,7 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
     /// Reset Pin ///
     /////////////////
     @JvmSynthetic
+    @OptIn(RawPasswordAccess::class)
     fun resetPassword(
         resetPasswordResponse: AuthenticateFlowResponse.PasswordConfirmedForReset,
         requests: List<AuthenticationRequest>
@@ -164,63 +270,99 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
 
         try {
             val kOpenSSL = AES256CBC_PBKDF2_HMAC_SHA256()
+
             val key: EncryptionKey = authenticationCoreManager
-                .getEncryptionKeyCopy() ?: persistentStorage.retrieveCredentials()
-                ?.let { credsString ->
-                    val creds = try {
-                        Credentials.fromString(credsString)
-                    } catch (e: IllegalArgumentException) {
-                        // TODO: Persisted String value was malformed. Add logic to
-                        //  handle it.
-                        throw AuthenticationException(
-                            AuthenticateFlowResponse.Error.FailedToDecryptEncryptionKey
+                .getEncryptionKeyCopy()
+                ?: authenticationCoreStorage
+                    .retrieveCredentials()
+                    ?.let { credsString ->
+                        val creds = try {
+                            Credentials.fromString(credsString)
+                        } catch (e: IllegalArgumentException) {
+                            // TODO: Persisted String value was malformed. Add logic to
+                            //  handle it.
+                            throw AuthenticationException(
+                                AuthenticateFlowResponse.Error.FailedToDecryptEncryptionKey
+                            )
+                        }
+
+                        val privateKey = creds.decryptPrivateKey(
+                            dispatchers,
+                            encryptionKeyHashIterations,
+                            kOpenSSL,
+                            resetPasswordResponse.getOriginalValidatedPassword()
                         )
-                    }
 
-                    creds.decryptEncryptionKey(
-                        dispatchers,
-                        encryptionKeyHashIterations,
-                        encryptionKeyHandler,
-                        kOpenSSL,
-                        resetPasswordResponse.getOriginalValidatedPassword()
-                    )
+                        val publicKey = try {
+                            creds.decryptPublicKey(
+                                dispatchers,
+                                privateKey,
+                                encryptionKeyHandler,
+                                kOpenSSL
+                            )
+                        } catch (e: AuthenticationException) {
+                            privateKey.clear()
+                            throw e
+                        }
 
-                } ?: throw AuthenticationException(
-                // TODO: Rename to Credentials from persistent storage
-                AuthenticateFlowResponse.Error.ResetPin.CredentialsFromPrefsReturnedNull
-            )
+                        try {
+                            encryptionKeyHandler.storeCopyOfEncryptionKey(
+                                privateKey.value,
+                                publicKey.value
+                            )
+                        } catch (e: EncryptionKeyException) {
+                            throw AuthenticationException(
+                                AuthenticateFlowResponse.Error.FailedToDecryptEncryptionKey
+                            )
+                        } finally {
+                            privateKey.clear()
+                            publicKey.clear()
+                        }
 
-            val encryptedEncryptionKey = encryptEncryptionKey(
-                key,
+                    } ?: throw AuthenticationException(
+                    AuthenticateFlowResponse.Error.ResetPassword.CredentialsFromPrefsReturnedNull
+                )
+
+            val encryptedPrivateKey = encryptPrivateKey(
+                key.privateKey,
                 resetPasswordResponse.getNewPasswordToBeSet() ?: let {
-                    key.password.clear()
+                    key.privateKey.clear()
                     throw AuthenticationException(
-                        AuthenticateFlowResponse.Error.ResetPin.NewPinEntryWasNull
+                        AuthenticateFlowResponse.Error.ResetPassword.NewPasswordEntryWasNull
                     )
                 },
                 kOpenSSL
             )
-            val encryptedTestString = encryptTestString(key, kOpenSSL)
+
+            val encryptedPublicKey = encryptPublicKey(
+                key.privateKey,
+                key.publicKey,
+                kOpenSSL
+            )
+
+            val encryptedTestString = encryptTestString(key.privateKey, kOpenSSL)
 
             val creds = Credentials.instantiate(
-                encryptedEncryptionKey,
+                encryptedPrivateKey,
+                encryptedPublicKey,
                 encryptedTestString
             )
 
             if (resetPasswordResponse.newPasswordHasBeenCleared) {
                 throw AuthenticationException(
-                    AuthenticateFlowResponse.Error.ResetPin.NewPinEntryWasCleared
+                    AuthenticateFlowResponse.Error.ResetPassword.NewPasswordEntryWasCleared
                 )
             }
 
-            persistentStorage.saveCredentials(creds)
+            authenticationCoreStorage.saveCredentials(creds)
 
             resetPasswordResponse.onPasswordResetCompletion()
+
             emitAll(
                 processValidPinEntryResponse(
                     key,
                     resetPasswordResponse.getNewPasswordToBeSet() ?: throw AuthenticationException(
-                        AuthenticateFlowResponse.Error.ResetPin.NewPinEntryWasNull
+                        AuthenticateFlowResponse.Error.ResetPassword.NewPasswordEntryWasNull
                     ),
                     requests
                 )
@@ -243,26 +385,38 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
         try {
             emit(AuthenticateFlowResponse.Notify.GeneratingAndEncryptingEncryptionKey)
 
-            val newKey = encryptionKeyHandler.generateEncryptionKey()
+            val newKey: EncryptionKey = withContext(dispatchers.default) {
+                encryptionKeyHandler.generateEncryptionKey()
+            }
+
             val kOpenssl = AES256CBC_PBKDF2_HMAC_SHA256()
+
             val initialInput = setPasswordFirstTimeResponse.getInitialUserInput()
-            val encryptedEncryptionKey = encryptEncryptionKey(
-                newKey,
+            val encryptedEncryptionKey = encryptPrivateKey(
+                newKey.privateKey,
                 initialInput,
                 kOpenssl
             )
-            val encryptedTestString = encryptTestString(newKey, kOpenssl)
+
+            val encryptedPublicKey = encryptPublicKey(
+                newKey.privateKey,
+                newKey.publicKey,
+                kOpenssl
+            )
+
+            val encryptedTestString = encryptTestString(newKey.privateKey, kOpenssl)
 
             if (setPasswordFirstTimeResponse.initialUserInputHasBeenCleared) {
-                throw AuthenticationException(AuthenticateFlowResponse.Error.SetPinFirstTime.NewPinEntryWasCleared)
+                throw AuthenticationException(AuthenticateFlowResponse.Error.SetPasswordFirstTime.NewPasswordEntryWasCleared)
             }
 
             val creds = Credentials.instantiate(
                 encryptedEncryptionKey,
+                encryptedPublicKey,
                 encryptedTestString
             )
 
-            persistentStorage.saveCredentials(creds)
+            authenticationCoreStorage.saveCredentials(creds)
 
             emitAll(
                 processValidPinEntryResponse(newKey, setPasswordFirstTimeResponse.getInitialUserInput(), requests)
@@ -274,15 +428,15 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
         }
     }
 
-    private suspend fun encryptEncryptionKey(
-        key: EncryptionKey,
+    private suspend fun encryptPrivateKey(
+        privateKey: Password,
         userInput: UserInputWriter,
         kOpenSSL: KOpenSSL
     ): EncryptedString {
         Password(userInput.toCharArray()).let { password ->
 
             @OptIn(RawPasswordAccess::class)
-            UnencryptedByteArray(key.password.value.toByteArray()).let { unencryptedByteArray ->
+            UnencryptedByteArray(privateKey.value.toByteArray()).let { unencryptedByteArray ->
 
                 return try {
                     kOpenSSL.encrypt(
@@ -292,7 +446,7 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
                         dispatchers.default
                     )
                 } catch (e: Exception) {
-                    key.password.clear()
+                    privateKey.clear()
                     throw AuthenticationException(
                         AuthenticateFlowResponse.Error.FailedToEncryptEncryptionKey
                     )
@@ -304,21 +458,54 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
         }
     }
 
+    @OptIn(RawPasswordAccess::class)
+    private suspend fun encryptPublicKey(
+        privateKey: Password,
+        publicKey: Password,
+        kOpenSSL: KOpenSSL
+    ): EncryptedString {
+        // If public key is empty, replace with "EMPTY" char array.
+        val rawPubKey = if (publicKey.value.isEmpty()) {
+            Credentials.EMPTY.toCharArray()
+        } else {
+            publicKey.value
+        }
+
+        UnencryptedByteArray(rawPubKey.toByteArray()).let { unencryptedByteArray ->
+            return try {
+                kOpenSSL.encrypt(
+                    privateKey,
+                    encryptionKeyHandler.getTestStringEncryptHashIterations(privateKey),
+                    unencryptedByteArray,
+                    dispatchers.default
+                )
+            } catch (e: Exception) {
+                privateKey.clear()
+                publicKey.clear()
+                throw AuthenticationException(
+                    AuthenticateFlowResponse.Error.FailedToEncryptEncryptionKey
+                )
+            } finally {
+                unencryptedByteArray.clear()
+            }
+        }
+    }
+
     private suspend fun encryptTestString(
-        key: EncryptionKey,
+        privateKey: Password,
         kOpenSSL: KOpenSSL
     ): EncryptedString {
         return try {
             kOpenSSL.encrypt(
-                key.password,
-                encryptionKeyHandler.getHashIterations(key),
+                privateKey,
+                encryptionKeyHandler.getTestStringEncryptHashIterations(privateKey),
                 UnencryptedString(Credentials.ENCRYPTION_KEY_TEST_STRING_VALUE),
                 dispatchers.default
             )
         } catch (e: Exception) {
-            key.password.clear()
+            privateKey.clear()
             throw AuthenticationException(
-                AuthenticateFlowResponse.Error.SetPinFirstTime.FailedToEncryptTestString
+                AuthenticateFlowResponse.Error.SetPasswordFirstTime.FailedToEncryptTestString
             )
         }
     }
@@ -331,56 +518,71 @@ internal class AuthenticationProcessor<T: AuthenticationManagerInitializer> priv
         userInput: UserInputWriter,
         requests: List<AuthenticationRequest>
     ): Flow<AuthenticateFlowResponse> = flow {
-        withContext(dispatchers.default) {
-            ArrayList<AuthenticationResponse>(requests.size).let { responses ->
-                for (request in requests.sortedBy { it.priority }) {
-                    @Exhaustive
-                    when (request) {
-                        is AuthenticationRequest.LogIn -> {
+        ArrayList<AuthenticationResponse>(requests.size).let { responses ->
 
-                            AuthenticationCoreManager.getEncryptionKey() ?: let {
-                                authenticationCoreManager.setEncryptionKey(encryptionKey)
-                            }
+            var stopProcessing: Boolean = false
+            for (request in requests.sortedBy { it.priority }) {
+                if (stopProcessing) {
+                    break
+                }
 
-                            authenticationCoreManager.updateAuthenticationState(
-                                AuthenticationState.NotRequired, null
-                            )
-                            responses.add(
-                                AuthenticationResponse.Success.Authenticated(request)
-                            )
-                        }
-                        is AuthenticationRequest.ResetPin -> {
+                @Exhaustive
+                when (request) {
+                    is AuthenticationRequest.LogIn -> {
 
-                            AuthenticateFlowResponse.PasswordConfirmedForReset
-                                .generate(userInput, request)
-                                ?.let { flowResponseToConfirmNewPinEntryToReset ->
-                                    emit(flowResponseToConfirmNewPinEntryToReset)
-                                    return@withContext
-                                }
+//                        authenticationCoreManager.getEncryptionKey() ?: let {
+//                            authenticationCoreManager.setEncryptionKey(encryptionKey)
+//                        }
 
-                            responses.add(
-                                AuthenticationResponse.Success.Authenticated(request)
-                            )
-                        }
-                        is AuthenticationRequest.ConfirmPin -> {
-                            responses.add(
-                                AuthenticationResponse.Success.Authenticated(request)
-                            )
-                        }
-                        is AuthenticationRequest.GetEncryptionKey -> {
+                        authenticationCoreManager.updateAuthenticationState(
+                            AuthenticationState.NotRequired, encryptionKey
+                        )
+                        responses.add(
+                            AuthenticationResponse.Success.Authenticated(request)
+                        )
+                    }
+                    is AuthenticationRequest.ResetPassword -> {
 
-                            AuthenticationCoreManager.getEncryptionKey() ?: let {
-                                authenticationCoreManager.setEncryptionKey(encryptionKey)
-                            }
+                        AuthenticateFlowResponse
+                            .PasswordConfirmedForReset
+                            .generate(userInput, request)
+                            ?.let { confirmNewPinEntryToReset ->
+                                stopProcessing = true
+                                emit(confirmNewPinEntryToReset)
+                            } ?: responses.add(
+                                    AuthenticationResponse.Success.Authenticated(request)
+                                )
+                    }
+                    is AuthenticationRequest.ConfirmPin -> {
+                        try {
+                            request
+                                .listener
+                                ?.doWithConfirmedPassword(Password(userInput.toCharArray()))
+                        } catch (e: Exception) {}
 
-                            responses.add(
-                                AuthenticationResponse.Success.Key(request, encryptionKey)
-                            )
-                        }
+                        responses.add(
+                            AuthenticationResponse.Success.Authenticated(request)
+                        )
+                    }
+                    is AuthenticationRequest.GetEncryptionKey -> {
+
+//                        authenticationCoreManager.getEncryptionKey() ?: let {
+//                            authenticationCoreManager.setEncryptionKey(encryptionKey)
+//                        }
+                        authenticationCoreManager.updateAuthenticationState(
+                            AuthenticationState.NotRequired, encryptionKey
+                        )
+
+                        responses.add(
+                            AuthenticationResponse.Success.Key(request, encryptionKey)
+                        )
                     }
                 }
+            }
+
+            if (!stopProcessing) {
                 emit(AuthenticateFlowResponse.Success.instantiate(responses))
             }
         }
-    }
+    }.flowOn(dispatchers.default)
 }

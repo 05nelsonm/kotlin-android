@@ -9,4 +9,6 @@ dependencies {
     api project(path: ':kotlin:concepts:authentication:concept-authentication-core')
     api project(path: ':kotlin:concepts:concept-coroutines')
     implementation project(path: ':kotlin:crypto:k-openssl')
+
+    testImplementation project(path: ':kotlin:test:test-feature-authentication-core')
 }

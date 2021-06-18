@@ -155,6 +155,10 @@ class AuthenticationViewModelContainer<T>(
             eventHandler.produceHapticFeedback()
         }
 
+        if (viewStateContainer.value.inputLockState.show) {
+            return
+        }
+
         try {
             userInput.dropLastCharacter()
         } catch (e: IllegalArgumentException) {
@@ -170,6 +174,10 @@ class AuthenticationViewModelContainer<T>(
             eventHandler.produceHapticFeedback()
         }
 
+        if (viewStateContainer.value.inputLockState.show) {
+            return false
+        }
+
         return try {
             userInput.addCharacter(c)
             true
@@ -179,9 +187,11 @@ class AuthenticationViewModelContainer<T>(
         }
     }
 
-    fun confirmPress() {
-        viewModelScope.launch(dispatchers.mainImmediate) {
-            eventHandler.produceHapticFeedback()
+    fun confirmPress(produceHapticFeedback: Boolean = true) {
+        if (produceHapticFeedback) {
+            viewModelScope.launch(dispatchers.mainImmediate) {
+                eventHandler.produceHapticFeedback()
+            }
         }
 
         if (confirmPressJob?.isActive == true) {
@@ -316,10 +326,10 @@ class AuthenticationViewModelContainer<T>(
                 is AuthenticateFlowResponse.Error.Authenticate -> {
                     processAuthenticateError(response)
                 }
-                is AuthenticateFlowResponse.Error.ResetPin -> {
+                is AuthenticateFlowResponse.Error.ResetPassword -> {
                     processResetPinError(response)
                 }
-                is AuthenticateFlowResponse.Error.SetPinFirstTime -> {
+                is AuthenticateFlowResponse.Error.SetPasswordFirstTime -> {
                     processSetPinFirstTimeError(response)
                 }
                 is AuthenticateFlowResponse.Error.FailedToDecryptEncryptionKey -> {
@@ -350,7 +360,7 @@ class AuthenticationViewModelContainer<T>(
     ) {
         @Exhaustive
         when (error) {
-            AuthenticateFlowResponse.Error.Authenticate.InvalidPinEntrySize -> {
+            AuthenticateFlowResponse.Error.Authenticate.InvalidPasswordEntrySize -> {
                 // Will never ever happen from here b/c confirm button does not
                 // show until min characters are met.
                 // TODO: Implement
@@ -359,61 +369,58 @@ class AuthenticationViewModelContainer<T>(
     }
 
     private suspend fun processResetPinError(
-        error: AuthenticateFlowResponse.Error.ResetPin
+        error: AuthenticateFlowResponse.Error.ResetPassword
     ) {
         @Exhaustive
         when (error) {
-            AuthenticateFlowResponse.Error.ResetPin.NewPinEntryWasNull -> {
+            AuthenticateFlowResponse.Error.ResetPassword.NewPasswordEntryWasNull -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.ResetPin.InvalidNewPinEntrySize -> {
+            AuthenticateFlowResponse.Error.ResetPassword.InvalidNewPasswordEntrySize -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.ResetPin.InvalidConfirmedPinEntrySize -> {
+            AuthenticateFlowResponse.Error.ResetPassword.InvalidConfirmedPasswordEntrySize -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.ResetPin.NewPinDoesNotMatchConfirmedPin -> {
+            AuthenticateFlowResponse.Error.ResetPassword.NewPinDoesNotMatchConfirmedPassword -> {
                 eventHandler.onNewPinDoesNotMatchConfirmedPin()
             }
-            AuthenticateFlowResponse.Error.ResetPin.CurrentPinEntryIsNotValid -> {
+            AuthenticateFlowResponse.Error.ResetPassword.CurrentPasswordEntryIsNotValid -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.ResetPin.CredentialsFromPrefsReturnedNull -> {
+            AuthenticateFlowResponse.Error.ResetPassword.CredentialsFromPrefsReturnedNull -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.ResetPin.FailedToStartService -> {
+            AuthenticateFlowResponse.Error.ResetPassword.CurrentPasswordEntryWasCleared -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.ResetPin.CurrentPinEntryWasCleared -> {
-                // TODO: Implement
-            }
-            AuthenticateFlowResponse.Error.ResetPin.NewPinEntryWasCleared -> {
+            AuthenticateFlowResponse.Error.ResetPassword.NewPasswordEntryWasCleared -> {
                 // TODO: Implement
             }
         }
     }
 
     private suspend fun processSetPinFirstTimeError(
-        error: AuthenticateFlowResponse.Error.SetPinFirstTime
+        error: AuthenticateFlowResponse.Error.SetPasswordFirstTime
     ) {
         @Exhaustive
         when (error) {
-            AuthenticateFlowResponse.Error.SetPinFirstTime.InvalidNewPinEntrySize -> {
+            AuthenticateFlowResponse.Error.SetPasswordFirstTime.InvalidNewPasswordEntrySize -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.SetPinFirstTime.NewPinDoesNotMatchConfirmedPin -> {
+            AuthenticateFlowResponse.Error.SetPasswordFirstTime.NewPasswordDoesNotMatchConfirmedPassword -> {
                 eventHandler.onNewPinDoesNotMatchConfirmedPin()
             }
-            AuthenticateFlowResponse.Error.SetPinFirstTime.CredentialsFromPrefsReturnedNull -> {
+            AuthenticateFlowResponse.Error.SetPasswordFirstTime.CredentialsFromPrefsReturnedNull -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.SetPinFirstTime.FailedToStartService -> {
+            AuthenticateFlowResponse.Error.SetPasswordFirstTime.FailedToStartService -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.SetPinFirstTime.NewPinEntryWasCleared -> {
+            AuthenticateFlowResponse.Error.SetPasswordFirstTime.NewPasswordEntryWasCleared -> {
                 // TODO: Implement
             }
-            AuthenticateFlowResponse.Error.SetPinFirstTime.FailedToEncryptTestString -> {
+            AuthenticateFlowResponse.Error.SetPasswordFirstTime.FailedToEncryptTestString -> {
                 // TODO: Implement
             }
         }
@@ -444,7 +451,7 @@ class AuthenticationViewModelContainer<T>(
                         confirmPressAction.updateAction(ConfirmPressAction.Action.Authenticate)
 
                         val viewState = when (request) {
-                            is AuthenticationRequest.ResetPin,
+                            is AuthenticationRequest.ResetPassword,
                             is AuthenticationRequest.ConfirmPin -> {
                                 AuthenticationViewState.ConfirmPin(
                                     userInput.inputLengthStateFlow.value,

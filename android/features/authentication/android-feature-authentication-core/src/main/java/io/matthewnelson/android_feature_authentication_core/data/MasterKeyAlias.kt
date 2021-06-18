@@ -15,7 +15,8 @@
 * */
 package io.matthewnelson.android_feature_authentication_core.data
 
-inline class MasterKeyAlias(val value: String) {
+@JvmInline
+value class MasterKeyAlias(val value: String) {
     init {
         require(value.isNotEmpty()) {
             "MasterKeyAlias must not be empty."

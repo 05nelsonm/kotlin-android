@@ -40,7 +40,7 @@ fun String.decodeBase32ToArray(type: Base32 = Base32.Default): ByteArray? {
 
     // If encoding type is Crockford, ensure all characters are uppercase
     val stringToDecode: String = if (type is Base32.Crockford) {
-        this.toUpperCase()
+        this.uppercase()
     } else {
         this
     }
@@ -69,39 +69,39 @@ fun String.decodeBase32ToArray(type: Base32 = Base32.Default): ByteArray? {
                                 // char ASCII value
                                 //  A    65    10
                                 //  H    72    17 (ASCII - 55)
-                                c.toLong() - 55L
+                                c.code - 55L
                             }
                             'I', 'L' -> {
                                 // Crockford treats characters 'I', 'i', 'L' and 'l' as 1
 
                                 // char ASCII value
                                 //  1    49    1 (ASCII - 48)
-                                '1'.toLong() - 48L
+                                '1'.code - 48L
                             }
                             'J', 'K' -> {
                                 // char ASCII value
                                 //  J    74    18
                                 //  K    75    19 (ASCII - 56)
-                                c.toLong() - 56L
+                                c.code - 56L
                             }
                             'M', 'N' -> {
                                 // char ASCII value
                                 //  M    77    20
                                 //  N    78    21 (ASCII - 57)
-                                c.toLong() - 57L
+                                c.code - 57L
                             }
                             'O' -> {
                                 // Crockford treats characters 'O' and 'o' as 0
 
                                 // char ASCII value
                                 //  0    48    0 (ASCII - 48)
-                                '0'.toLong() - 48L
+                                '0'.code - 48L
                             }
                             in 'P'..'T' -> {
                                 // char ASCII value
                                 //  P    80    22
                                 //  T    84    26 (ASCII - 58)
-                                c.toLong() - 58L
+                                c.code - 58L
                             }
                             'U' -> {
                                 // Crockford excludes 'U' and 'u'
@@ -111,7 +111,7 @@ fun String.decodeBase32ToArray(type: Base32 = Base32.Default): ByteArray? {
                                 // char ASCII value
                                 //  V    86    27
                                 //  Z    90    31 (ASCII - 59)
-                                c.toLong() - 59L
+                                c.code - 59L
                             }
                         }
                     }
@@ -119,7 +119,7 @@ fun String.decodeBase32ToArray(type: Base32 = Base32.Default): ByteArray? {
                         // char ASCII value
                         //  A    65    0
                         //  Z    90    25 (ASCII - 65)
-                        c.toLong() - 65L
+                        c.code - 65L
                     }
                     is Base32.Hex -> {
 
@@ -131,7 +131,7 @@ fun String.decodeBase32ToArray(type: Base32 = Base32.Default): ByteArray? {
                         // char ASCII value
                         //  A    65    10
                         //  V    86    31 (ASCII - 55)
-                        c.toLong() - 55L
+                        c.code - 55L
                     }
                 }
             }
@@ -147,14 +147,14 @@ fun String.decodeBase32ToArray(type: Base32 = Base32.Default): ByteArray? {
                         // char ASCII value
                         //  2    50    26
                         //  7    55    31 (ASCII - 24)
-                        c.toLong() - 24L
+                        c.code - 24L
                     }
                     is Base32.Crockford,
                     is Base32.Hex -> {
                         // char ASCII value
                         //  0    48    0
                         //  9    57    9 (ASCII - 48)
-                        c.toLong() - 48L
+                        c.code - 48L
                     }
                 }
             }
@@ -256,12 +256,12 @@ fun ByteArray.encodeBase32(type: Base32 = Base32.Default): String {
             bitBuffer = (bitBuffer shl 8) + this.retrieveBits(i)
             out[index++] = base32Lookup[(bitBuffer shr 3 and 0x1fL).toInt()] // 8-1*5 = 3
             out[index++] = base32Lookup[(bitBuffer shl 2 and 0x1fL).toInt()] // 5-3 = 2
-            out[index++] = '='.toByte()
-            out[index++] = '='.toByte()
-            out[index++] = '='.toByte()
-            out[index++] = '='.toByte()
-            out[index++] = '='.toByte()
-            out[index]   = '='.toByte()
+            out[index++] = '='.code.toByte()
+            out[index++] = '='.code.toByte()
+            out[index++] = '='.code.toByte()
+            out[index++] = '='.code.toByte()
+            out[index++] = '='.code.toByte()
+            out[index]   = '='.code.toByte()
         }
         2 -> { // 8*2 = 16 bits
             bitBuffer = (bitBuffer shl 8) + this.retrieveBits(i++)
@@ -270,10 +270,10 @@ fun ByteArray.encodeBase32(type: Base32 = Base32.Default): String {
             out[index++] = base32Lookup[(bitBuffer shr  6 and 0x1fL).toInt()] // 16-2*5 = 6
             out[index++] = base32Lookup[(bitBuffer shr  1 and 0x1fL).toInt()] // 16-3*5 = 1
             out[index++] = base32Lookup[(bitBuffer shl  4 and 0x1fL).toInt()] // 5-1 = 4
-            out[index++] = '='.toByte()
-            out[index++] = '='.toByte()
-            out[index++] = '='.toByte()
-            out[index]   = '='.toByte()
+            out[index++] = '='.code.toByte()
+            out[index++] = '='.code.toByte()
+            out[index++] = '='.code.toByte()
+            out[index]   = '='.code.toByte()
         }
         3 -> { // 8*3 = 24 bits
             bitBuffer = (bitBuffer shl 8) + this.retrieveBits(i++)
@@ -284,9 +284,9 @@ fun ByteArray.encodeBase32(type: Base32 = Base32.Default): String {
             out[index++] = base32Lookup[(bitBuffer shr  9 and 0x1fL).toInt()] // 24-3*5 = 9
             out[index++] = base32Lookup[(bitBuffer shr  4 and 0x1fL).toInt()] // 24-4*5 = 4
             out[index++] = base32Lookup[(bitBuffer shl  1 and 0x1fL).toInt()] // 5-4 = 1
-            out[index++] = '='.toByte()
-            out[index++] = '='.toByte()
-            out[index]   = '='.toByte()
+            out[index++] = '='.code.toByte()
+            out[index++] = '='.code.toByte()
+            out[index]   = '='.code.toByte()
         }
         4 -> { // 8*4 = 32 bits
             bitBuffer = (bitBuffer shl 8) + this.retrieveBits(i++)
@@ -300,7 +300,7 @@ fun ByteArray.encodeBase32(type: Base32 = Base32.Default): String {
             out[index++] = base32Lookup[(bitBuffer shr  7 and 0x1fL).toInt()] // 32-5*5 = 7
             out[index++] = base32Lookup[(bitBuffer shr  2 and 0x1fL).toInt()] // 32-6*5 = 2
             out[index++] = base32Lookup[(bitBuffer shl  3 and 0x1fL).toInt()] // 5-2 = 3
-            out[index]   = '='.toByte()
+            out[index]   = '='.code.toByte()
         }
     }
 

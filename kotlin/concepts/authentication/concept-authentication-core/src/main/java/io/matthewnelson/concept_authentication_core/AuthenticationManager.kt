@@ -16,11 +16,13 @@
 package io.matthewnelson.concept_authentication_core
 
 import io.matthewnelson.concept_authentication.coordinator.AuthenticationRequest
+import io.matthewnelson.concept_authentication.coordinator.AuthenticationResponse
 import io.matthewnelson.concept_authentication.state.AuthenticationStateManager
 import io.matthewnelson.concept_authentication_core.model.ConfirmUserInputToReset
 import io.matthewnelson.concept_authentication_core.model.ConfirmUserInputToSetForFirstTime
 import io.matthewnelson.concept_authentication_core.model.UserInput
 import io.matthewnelson.concept_foreground_state.ForegroundStateManager
+import io.matthewnelson.crypto_common.clazzes.Password
 import kotlinx.coroutines.flow.Flow
 
 abstract class AuthenticationManager<
@@ -31,6 +33,20 @@ abstract class AuthenticationManager<
     ForegroundStateManager // TODO: Move to separate feature
 {
     abstract fun getNewUserInput(): UserInput
+
+    abstract suspend fun isAnEncryptionKeySet(): Boolean
+
+    /**
+     * Primarily used by the
+     * [io.matthewnelson.concept_authentication.coordinator.AuthenticationCoordinator] for
+     * logging in without the need to send the user to the Authentication View. This API will
+     * check the [request] for if [AuthenticationRequest.LogIn.privateKey] is not null, and
+     * then attempt to log in. See [AuthenticationRequest.LogIn] for more information.
+     * */
+    abstract fun authenticate(
+        privateKey: Password,
+        request: AuthenticationRequest.LogIn
+    ): Flow<AuthenticationResponse>
 
     abstract fun authenticate(
         userInput: UserInput,

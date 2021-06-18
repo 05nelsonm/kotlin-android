@@ -16,6 +16,7 @@
 package io.matthewnelson.android_feature_viewmodel
 
 import io.matthewnelson.android_concept_views.MotionLayoutViewState
+import io.matthewnelson.concept_coroutines.CoroutineDispatchers
 import io.matthewnelson.concept_views.sideeffect.SideEffect
 
 /**
@@ -29,11 +30,11 @@ abstract class MotionLayoutViewModel<
         T,
         SE: SideEffect<T>,
         MLVS: MotionLayoutViewState<MLVS>
-        >(initialViewState: MLVS): SideEffectViewModel<
+        >(dispatchers: CoroutineDispatchers, initialViewState: MLVS): SideEffectViewModel<
         T,
         SE,
         MLVS
-        >(initialViewState)
+        >(dispatchers, initialViewState)
 {
 
     /**

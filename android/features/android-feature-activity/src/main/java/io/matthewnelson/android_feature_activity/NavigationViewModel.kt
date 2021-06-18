@@ -16,8 +16,10 @@
 package io.matthewnelson.android_feature_activity
 
 import androidx.navigation.NavController
+import io.matthewnelson.concept_coroutines.CoroutineDispatchers
 import io.matthewnelson.feature_navigation.NavigationDriver
 
-interface NavigationViewModel {
-    val navigationDriver: NavigationDriver<NavController>
+interface NavigationViewModel<T: NavigationDriver<NavController>> {
+    val navigationDriver: T
+    val dispatchers: CoroutineDispatchers
 }

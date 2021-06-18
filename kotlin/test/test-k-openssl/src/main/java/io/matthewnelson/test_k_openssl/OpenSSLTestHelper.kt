@@ -33,51 +33,81 @@ import java.util.*
 abstract class OpenSSLTestHelper: CoroutineTestHelper() {
 
     companion object {
-        val openSSLExe = File("/usr/bin/", "openssl")
-        val testDirectory = File("/tmp/junit/KOpenSSLUnitTest")
-        val script = File(testDirectory, "openssl_testing_script.sh")
+        var openSSLExe: File? = null
+        var testDirectory: File? = null
+        var script: File? = null
 
         @JvmStatic
         @BeforeClass
         fun setupBeforeClassOpenSSLTestHelper() {
-            if (!openSSLExe.exists())
-                throw IOException(
-                    "${openSSLExe.absolutePath} is required to be installed to run these tests"
-                )
-            if (!File("/tmp").isDirectory)
-                throw IOException(
-                    "/tmp directory is needed to run these tests"
-                )
-            if (!testDirectory.exists() && !testDirectory.mkdirs())
-                throw IOException(
-                    "Could not create test dirs to run these tests"
+            try {
+                val openssLExeTemp = File("/usr/bin/", "openssl")
+                if (!openssLExeTemp.exists()) {
+                    throw IOException(
+                        "${openssLExeTemp.absolutePath} is required to be installed to run these tests"
+                    )
+                } else {
+                    openSSLExe = openssLExeTemp
+                }
+
+                if (!File("/tmp").isDirectory) {
+                    throw IOException(
+                        "/tmp directory is needed to run these tests"
+                    )
+                }
+
+                val testDirectoryTemp = File("/tmp/junit/KOpenSSLUnitTest")
+                if (!testDirectoryTemp.exists() && !testDirectoryTemp.mkdirs()) {
+                    throw IOException(
+                        "Could not create test dirs to run these tests"
+                    )
+                } else {
+                    testDirectory = testDirectoryTemp
+                }
+
+                val scriptTemp = File(testDirectoryTemp, "openssl_testing_script.sh")
+
+                // Have to write a script to execute OpenSSL commands b/c OpenSSL
+                // has it's own shell that interferes with Process execution.
+                scriptTemp.createNewFile()
+                scriptTemp.setExecutable(true)
+
+                if (!scriptTemp.exists()) {
+                    throw IOException(
+                        "${scriptTemp.name} was unable to be created and is needed to run these tests"
+                    )
+                }
+
+                if (!scriptTemp.canExecute()) {
+                    throw IOException(
+                        "${scriptTemp.name} was unable to be set executable and is needed to run these tests"
+                    )
+                } else {
+                    script = scriptTemp
+                }
+
+                scriptTemp.writeText(
+                    "#!/usr/bin/env bash\n\n" +
+                            "echo \"$1\" |\n" +
+                            "/usr/bin/openssl aes-256-cbc \"$2\" -a -salt -pbkdf2 -iter \"$3\" -k \"$4\"\n"
                 )
 
-            // Have to write a script to execute OpenSSL commands b/c OpenSSL
-            // has it's own shell that interferes with Process execution.
-            script.createNewFile()
-            script.setExecutable(true)
-
-            if (!script.exists())
-                throw IOException(
-                    "${script.name} was unable to be created and is needed to run these tests"
-                )
-            if (!script.canExecute())
-                throw IOException(
-                    "${script.name} was unable to be set executable and is needed to run these tests"
-                )
-
-            script.writeText(
-                "#!/usr/bin/env bash\n\n" +
-                        "echo \"$1\" |\n" +
-                        "/usr/bin/openssl aes-256-cbc \"$2\" -a -salt -pbkdf2 -iter \"$3\" -k \"$4\"\n"
-            )
+            } catch (e: Exception) {
+                openSSLExe = null
+                testDirectory?.deleteRecursively()
+                testDirectory = null
+                script = null
+                println("\n***************************\n\n${e.message}\n\n***************************")
+            }
         }
 
         @JvmStatic
         @AfterClass
         fun tearDownAfterClassOpenSSLTestHelper() {
-            testDirectory.deleteRecursively()
+            testDirectory?.deleteRecursively()
+            openSSLExe = null
+            testDirectory = null
+            script = null
         }
 
     }
@@ -89,59 +119,61 @@ abstract class OpenSSLTestHelper: CoroutineTestHelper() {
         iterations: Int,
         password: String
     ): String? {
-        val cmds = arrayListOf<String>(
-            "bash", "-c",
-            script.absolutePath +
-                    " \"$stringToEcho\"" +
-                    " \"${if (decrypt) "-d" else "-e"}\"" +
-                    " \"${iterations}\"" +
-                    " \"${password}\""
-        )
-
-        if (printOutput)
-            println(cmds.joinToString(" "))
-
-        val processBuilder = ProcessBuilder().command(cmds)
-        var process: Process? = null
-        var inputStreamReader: InputStreamReader? = null
-        var errorStreamReader: InputStreamReader? = null
-        var inputScanner: Scanner? = null
-        var errorScanner: Scanner? = null
-        var output = ""
-
-        try {
-            process = processBuilder.start()
-            inputStreamReader = InputStreamReader(process.inputStream)
-            errorStreamReader = InputStreamReader(process.errorStream)
-            inputScanner = Scanner(inputStreamReader)
-            errorScanner = Scanner(errorStreamReader)
-            while (inputScanner.hasNextLine()) {
-                try {
-                    output += inputScanner.nextLine()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                if (inputScanner.hasNextLine())
-                    output += "\n"
-            }
-
-            while (errorScanner.hasNextLine()) {
-                println("ERROR: ${errorScanner.nextLine()}")
-            }
+        return script?.let { nnScript ->
+            val cmds = arrayListOf<String>(
+                "bash", "-c",
+                nnScript.absolutePath +
+                        " \"$stringToEcho\"" +
+                        " \"${if (decrypt) "-d" else "-e"}\"" +
+                        " \"${iterations}\"" +
+                        " \"${password}\""
+            )
 
             if (printOutput)
-                println(output)
+                println(cmds.joinToString(" "))
 
-        } catch (e: Exception) {
-            e.printStackTrace()
-        } finally {
-            inputScanner?.close()
-            inputStreamReader?.close()
-            errorScanner?.close()
-            errorStreamReader?.close()
-            process?.destroy()
+            val processBuilder = ProcessBuilder().command(cmds)
+            var process: Process? = null
+            var inputStreamReader: InputStreamReader? = null
+            var errorStreamReader: InputStreamReader? = null
+            var inputScanner: Scanner? = null
+            var errorScanner: Scanner? = null
+            var output = ""
+
+            try {
+                process = processBuilder.start()
+                inputStreamReader = InputStreamReader(process.inputStream)
+                errorStreamReader = InputStreamReader(process.errorStream)
+                inputScanner = Scanner(inputStreamReader)
+                errorScanner = Scanner(errorStreamReader)
+                while (inputScanner.hasNextLine()) {
+                    try {
+                        output += inputScanner.nextLine()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                    if (inputScanner.hasNextLine())
+                        output += "\n"
+                }
+
+                while (errorScanner.hasNextLine()) {
+                    println("ERROR: ${errorScanner.nextLine()}")
+                }
+
+                if (printOutput)
+                    println(output)
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                inputScanner?.close()
+                inputStreamReader?.close()
+                errorScanner?.close()
+                errorStreamReader?.close()
+                process?.destroy()
+            }
+
+            output
         }
-
-        return output
     }
 }

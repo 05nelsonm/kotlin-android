@@ -18,10 +18,8 @@ class PKCS5S2ParametersGenerator(digest: Digest = SHA256Digest()): PBEParameters
     private val hMac: Mac
     private val state: ByteArray
 
-    @Throws(
-        CancellationException::class,
-        IllegalArgumentException::class
-    )
+    @Suppress("FunctionName")
+    @Throws(CancellationException::class, IllegalArgumentException::class)
     private suspend fun F(
         S: ByteArray?,
         c: Int,

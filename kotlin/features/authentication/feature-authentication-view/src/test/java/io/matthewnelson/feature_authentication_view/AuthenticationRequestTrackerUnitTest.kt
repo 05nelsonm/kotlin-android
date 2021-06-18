@@ -30,7 +30,7 @@ internal class AuthenticationRequestTrackerUnitTest {
         Assert.assertTrue(tracker.addRequest(AuthenticationRequest.GetEncryptionKey()))
         Assert.assertTrue(tracker.addRequest(AuthenticationRequest.LogIn()))
         Assert.assertFalse(tracker.addRequest(AuthenticationRequest.GetEncryptionKey()))
-        Assert.assertFalse(tracker.addRequest(AuthenticationRequest.ResetPin()))
+        Assert.assertFalse(tracker.addRequest(AuthenticationRequest.ResetPassword()))
         Assert.assertFalse(tracker.addRequest(AuthenticationRequest.GetEncryptionKey()))
         Assert.assertTrue(tracker.addRequest(AuthenticationRequest.LogIn()))
     }

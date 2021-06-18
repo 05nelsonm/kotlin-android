@@ -15,6 +15,7 @@
 * */
 package io.matthewnelson.android_feature_viewmodel
 
+import io.matthewnelson.concept_coroutines.CoroutineDispatchers
 import io.matthewnelson.concept_views.sideeffect.SideEffect
 import io.matthewnelson.concept_views.sideeffect.SideEffectContainer
 import io.matthewnelson.concept_views.sideeffect.collect
@@ -40,9 +41,9 @@ abstract class SideEffectViewModel<
         T,
         SE: SideEffect<T>,
         VS: ViewState<VS>
-        >(initialViewState: VS): BaseViewModel<
+        >(dispatchers: CoroutineDispatchers, initialViewState: VS): BaseViewModel<
         VS
-        >(initialViewState)
+        >(dispatchers, initialViewState)
 {
     @Suppress("RemoveExplicitTypeArguments")
     open val sideEffectContainer: SideEffectContainer<T, SE> by lazy {

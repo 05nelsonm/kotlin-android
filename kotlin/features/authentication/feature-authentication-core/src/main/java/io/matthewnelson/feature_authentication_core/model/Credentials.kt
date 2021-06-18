@@ -16,28 +16,37 @@
 package io.matthewnelson.feature_authentication_core.model
 
 import io.matthewnelson.concept_coroutines.CoroutineDispatchers
-import io.matthewnelson.concept_encryption_key.EncryptionKey
 import io.matthewnelson.concept_encryption_key.EncryptionKeyHandler
 import io.matthewnelson.k_openssl.KOpenSSL
-import io.matthewnelson.k_openssl_common.annotations.UnencryptedDataAccess
-import io.matthewnelson.k_openssl_common.clazzes.*
+import io.matthewnelson.k_openssl.isSalted
+import io.matthewnelson.crypto_common.annotations.UnencryptedDataAccess
+import io.matthewnelson.crypto_common.clazzes.*
 
+/**
+ * [encryptedPrivateKey] is encrypted with the User's PIN + application specified [HashIterations]
+ * [encryptedPublicKey] is encrypted with the decrypted [encryptedPrivateKey]
+ * [encryptedTestString] is encrypted with the decrypted [encryptedPrivateKey]
+ * */
 internal class Credentials private constructor(
-    private val encryptedEncryptionKey: EncryptedString,
-    private val encryptionKeyTestString: EncryptedString
+    private val encryptedPrivateKey: EncryptedString,
+    private val encryptedPublicKey: EncryptedString,
+    private val encryptedTestString: EncryptedString
 ) {
 
     companion object {
         const val ENCRYPTION_KEY_TEST_STRING_VALUE = "There will only ever be 21 million..."
-        private const val DELIMITER = "|-SAFU-|"
+        const val DELIMITER = "|-SAFU-|"
+        const val EMPTY = "EMPTY"
 
         @JvmSynthetic
         fun instantiate(
-            encryptedEncryptionKey: EncryptedString,
+            encryptedPrivateKey: EncryptedString,
+            encryptedPublicKey: EncryptedString,
             encryptionKeyTestString: EncryptedString
         ): Credentials =
             Credentials(
-                encryptedEncryptionKey,
+                encryptedPrivateKey,
+                encryptedPublicKey,
                 encryptionKeyTestString
             )
 
@@ -46,9 +55,10 @@ internal class Credentials private constructor(
         fun fromString(string: String): Credentials =
             string.split(DELIMITER).let { list ->
                 if (
-                    list.size != 2 ||
-                    !KOpenSSL.isSalted(list[0]) ||
-                    !KOpenSSL.isSalted(list[1])
+                    list.size != 3 ||
+                    !list[0].isSalted ||
+                    !list[1].isSalted ||
+                    !list[2].isSalted
                 ) {
                     throw IllegalArgumentException(
                         "String value did not meet requirements for creating Credentials"
@@ -57,7 +67,8 @@ internal class Credentials private constructor(
 
                 return Credentials(
                     EncryptedString(list[0]),
-                    EncryptedString(list[1])
+                    EncryptedString(list[1]),
+                    EncryptedString(list[2]),
                 )
             }
     }
@@ -65,19 +76,18 @@ internal class Credentials private constructor(
     @JvmSynthetic
     @Throws(AuthenticationException::class)
     @Suppress("BlockingMethodInNonBlockingContext")
-    suspend fun decryptEncryptionKey(
+    suspend fun decryptPrivateKey(
         dispatchers: CoroutineDispatchers,
         encryptionKeyHashIterations: HashIterations,
-        encryptionKeyHandler: EncryptionKeyHandler,
         kOpenSSL: KOpenSSL,
         userInput: UserInputWriter
-    ): EncryptionKey {
+    ): Password {
         val password = Password(userInput.toCharArray())
-        try {
+        return try {
             val unencryptedByteArray = kOpenSSL.decrypt(
                 encryptionKeyHashIterations,
                 password,
-                encryptedEncryptionKey,
+                encryptedPrivateKey,
                 dispatchers.default
             )
 
@@ -85,11 +95,7 @@ internal class Credentials private constructor(
             unencryptedByteArray.clear()
 
             @OptIn(UnencryptedDataAccess::class)
-            return try {
-                encryptionKeyHandler.storeCopyOfEncryptionKey(unencryptedCharArray.value)
-            } finally {
-                unencryptedCharArray.clear()
-            }
+            Password(unencryptedCharArray.value)
         } catch (e: Exception) {
             throw AuthenticationException(
                 AuthenticateFlowResponse.Error.FailedToDecryptEncryptionKey
@@ -99,12 +105,55 @@ internal class Credentials private constructor(
         }
     }
 
+
+
+    @JvmSynthetic
+    @OptIn(UnencryptedDataAccess::class)
+    @Throws(AuthenticationException::class)
+    @Suppress("BlockingMethodInNonBlockingContext")
+    suspend fun decryptPublicKey(
+        dispatchers: CoroutineDispatchers,
+        privateKey: Password,
+        encryptionKeyHandler: EncryptionKeyHandler,
+        kOpenSSL: KOpenSSL
+    ): Password {
+        return try {
+            val unencryptedByteArray = kOpenSSL.decrypt(
+                encryptionKeyHandler.getTestStringEncryptHashIterations(privateKey),
+                privateKey,
+                encryptedPublicKey,
+                dispatchers.default
+            )
+
+            val unencryptedCharArray = unencryptedByteArray.toUnencryptedCharArray()
+            unencryptedByteArray.clear()
+
+            if (unencryptedCharArray.value.size >= EMPTY.length) {
+                // check empty
+                if (unencryptedCharArray.value.copyOfRange(0, EMPTY.length).joinToString("") == EMPTY) {
+                    Password(CharArray(0))
+                } else {
+                    Password(unencryptedCharArray.value)
+                }
+
+            } else {
+                Password(unencryptedCharArray.value)
+            }
+        } catch (e: Exception) {
+            throw AuthenticationException(
+                AuthenticateFlowResponse.Error.FailedToDecryptEncryptionKey
+            )
+        }
+    }
+
     @JvmSynthetic
     override fun toString(): String {
         StringBuilder().let { sb ->
-            sb.append(encryptedEncryptionKey.value)
+            sb.append(encryptedPrivateKey.value)
             sb.append(DELIMITER)
-            sb.append(encryptionKeyTestString.value)
+            sb.append(encryptedPublicKey.value)
+            sb.append(DELIMITER)
+            sb.append(encryptedTestString.value)
             return sb.toString()
         }
     }
@@ -114,15 +163,15 @@ internal class Credentials private constructor(
     @Suppress("BlockingMethodInNonBlockingContext")
     suspend fun validateTestString(
         dispatchers: CoroutineDispatchers,
-        encryptionKey: EncryptionKey,
+        privateKey: Password,
         encryptionKeyHandler: EncryptionKeyHandler,
         kOpenSSL: KOpenSSL
     ): Boolean {
         return try {
             kOpenSSL.decrypt(
-                encryptionKey.password,
-                encryptionKeyHandler.getHashIterations(encryptionKey),
-                encryptionKeyTestString,
+                privateKey,
+                encryptionKeyHandler.getTestStringEncryptHashIterations(privateKey),
+                encryptedTestString,
                 dispatchers.default
             ).let { result ->
                 result.value == ENCRYPTION_KEY_TEST_STRING_VALUE

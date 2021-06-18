@@ -59,7 +59,7 @@ object UTF8 {
                 if (j >= utf16.size) {
                     return -1
                 }
-                utf16[j++] = codeUnit.toChar()
+                utf16[j++] = codeUnit.toInt().toChar()
                 continue
             }
             val first = firstUnitTable[codeUnit.toInt() and 0x7F]
